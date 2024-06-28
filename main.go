@@ -117,6 +117,7 @@ func registerToSystemd(
 ) {
 	execPath, err := os.Executable()
 	if err != nil {
+		fmt.Println("Unable to find the path of the rclone_bisync_daemon executable")
 		fmt.Println(err)
 		panic("")
 	}
@@ -138,6 +139,7 @@ func registerToSystemd(
 
 	homedir, err := os.UserHomeDir()
 	if err != nil {
+		fmt.Println("Unable to resolve the home directory")
 		fmt.Println(err)
 		panic("")
 	}
@@ -146,6 +148,7 @@ func registerToSystemd(
 
 	err = os.MkdirAll(servicesDir, 0755)
 	if err != nil {
+		fmt.Println("Unable to create the systemd services directory")
 		fmt.Println(err)
 		panic("")
 	}
@@ -155,12 +158,14 @@ func registerToSystemd(
 		[]byte(strings.Join(lines, "\n")), 0644,
 	)
 	if err != nil {
+		fmt.Println("Unable to write the systemd service file")
 		fmt.Println(err)
 		panic("")
 	}
 
 	enableCmd := exec.Command("systemctl", "--user", "enable", "rclone-bisync-daemon")
 	if err := enableCmd.Run(); err != nil {
+		fmt.Println("Unable to enable the rclone bisync daemon")
 		fmt.Println(err)
 	} else {
 		fmt.Println("rclone bisync daemon was successfully registered")
@@ -168,19 +173,28 @@ func registerToSystemd(
 
 	startCmd := exec.Command("systemctl", "--user", "start", "rclone-bisync-daemon")
 	if err := startCmd.Run(); err != nil {
+		fmt.Println("Unable to start the rclone bisync daemon")
 		fmt.Println(err)
 	}
+
+	bisync(dirPath, remotePath, true)
 }
 
 var isSyncing = false
 
-func bisync(dirPath string, remotePath string) {
+func when[T any](condition bool, then T, els T) T {
+	if condition {
+		return then
+	}
+	return els
+}
+
+func bisync(dirPath string, remotePath string, resync bool) {
 	if isSyncing {
 		return
 	}
 
-	fmt.Println("Syncing started")
-	cmd := exec.Command("rclone",
+	cmdArgs := []string{
 		"bisync",
 		dirPath,
 		remotePath,
@@ -191,10 +205,17 @@ func bisync(dirPath string, remotePath string) {
 		"-MvP",
 		"--drive-skip-gdocs",
 		"--fix-case",
-		"--resync",
-	)
-	if err := cmd.Run(); err != nil {
-		fmt.Println(err)
+	}
+
+	if resync {
+		cmdArgs = append(cmdArgs, "--resync")
+	}
+
+	fmt.Println("Syncing started")
+	cmd := exec.Command("rclone", cmdArgs...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Println("Syncing failed")
+		fmt.Println(err, "\n", string(out))
 	} else {
 		fmt.Println("Syncing finished")
 	}
@@ -211,12 +232,12 @@ func runDaemon(
 	fmt.Println("Starting rclone bisync daemon")
 
 	setInterval(func() {
-		bisync(dirPath, remotePath)
+		bisync(dirPath, remotePath, false)
 	}, interval)
 
-	go setupWatcher(dirPath, remotePath, watchDebounce)
+	bisync(dirPath, remotePath, false)
 
-	bisync(dirPath, remotePath)
+	go setupWatcher(dirPath, remotePath, watchDebounce)
 }
 
 func setupWatcher(dirPath string, remotePath string, debounce time.Duration) {
@@ -245,7 +266,7 @@ func setupWatcher(dirPath string, remotePath string, debounce time.Duration) {
 		}
 
 		currentTimeout = setTimeout(func() {
-			bisync(dirPath, remotePath)
+			bisync(dirPath, remotePath, false)
 		}, debounce)
 	}
 
@@ -266,11 +287,13 @@ func setupWatcher(dirPath string, remotePath string, debounce time.Duration) {
 
 	// Watch test_folder recursively for changes.
 	if err := w.AddRecursive(dirPath); err != nil {
+		fmt.Println("Failed to add directory to watcher")
 		fmt.Println(err)
 	}
 
 	// Start the watching process - it'll check for changes every 1000ms.
 	if err := w.Start(time.Millisecond * 1000); err != nil {
+		fmt.Println("File Watcher returned an error")
 		fmt.Println(err)
 	}
 }
