@@ -134,7 +134,7 @@ func registerToSystemd(
 		"RestartSec=5",
 		"",
 		"[Install]",
-		"WantedBy=multi-user.target",
+		"WantedBy=default.target",
 	}
 
 	homedir, err := os.UserHomeDir()
