@@ -25,7 +25,6 @@ func printRunHelp() {
 	fmt.Println("    --remote-dir <path>        Path to the remote directory to sync")
 	fmt.Println("    --sync-interval <seconds>  How often to auto sync the directories")
 	fmt.Println("    --debounce <seconds>       Sync debounce time between file changes")
-
 }
 
 func printRegisterHelp() {
@@ -38,7 +37,16 @@ func printRegisterHelp() {
 	fmt.Println("    --remote-dir <path>        Path to the remote directory to sync")
 	fmt.Println("    --sync-interval <seconds>  How often to auto sync the directories")
 	fmt.Println("    --debounce <seconds>       Sync debounce time between file changes")
+}
 
+func printResyncHelp() {
+	fmt.Println("Usage: rclone_bisync_daemon resync [options]")
+	fmt.Println("")
+	fmt.Println("  Runs a one time re-sync of the local and remote directories.")
+	fmt.Println("")
+	fmt.Println("  Options:")
+	fmt.Println("    --dir <path>               Path to the local directory to sync")
+	fmt.Println("    --remote-dir <path>        Path to the remote directory to sync")
 }
 
 func main() {
@@ -85,6 +93,17 @@ func main() {
 			time.Duration(interval*int64(time.Second)),
 			time.Duration(watchDebounce*int64(time.Second)),
 		)
+	case "resync":
+		if programArgs.HasParam("help") {
+			printResyncHelp()
+			return
+		}
+
+		dirPath := programArgs.GetParam("dir", "")
+		remotePath := programArgs.GetParam("remote-dir", "")
+		validateDirPath(dirPath)
+		validateSet(remotePath)
+		bisync(dirPath, remotePath, true)
 	}
 
 	wg.Wait()
