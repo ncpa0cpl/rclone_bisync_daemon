@@ -293,8 +293,10 @@ func setupWatcher(dirPath string, remotePath string, debounce time.Duration) {
 		for {
 			select {
 			case <-w.Event:
-				fmt.Println("received fs event")
-				onNextChange()
+				if !isSyncing {
+					fmt.Println("received fs event")
+					onNextChange()
+				}
 			case err := <-w.Error:
 				fmt.Println(err)
 			case <-w.Closed:
